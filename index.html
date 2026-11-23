@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quản lý Thư viện</title>
+<style>
+:root{--ink:#17313b;--bg:#eef3f4;--card:#fff;--line:#d3dee1;--main:#0f5c63;--acc:#c8501e;--ok:#2e7d4f;--bad:#b3261e;--mut:#5d7279}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 Georgia,"Times New Roman",serif;background:var(--bg);color:var(--ink)}
+h1,h2,button,input,select,th,nav{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--main);color:#fff;padding:14px 16px}
+header h1{margin:0;font-size:19px}
+header p{margin:2px 0 0;font-size:13px;opacity:.85}
+nav{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
+nav button{flex:1;min-width:92px;border:0;background:none;padding:12px 8px;font-size:14px;cursor:pointer;color:var(--mut);border-bottom:3px solid transparent}
+nav button.on{color:var(--main);border-color:var(--acc);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px;margin-bottom:14px}
+h2{font-size:17px;margin:0 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+input,select{padding:9px;border:1px solid var(--line);border-radius:4px;font-size:14px;flex:1;min-width:130px;background:#fff}
+button.b{background:var(--main);color:#fff;border:0;border-radius:4px;padding:9px 14px;cursor:pointer;font-size:14px}
+button.b.g{background:#fff;color:var(--main);border:1px solid var(--main)}
+button.s{padding:5px 9px;font-size:12px}
+button.d{background:var(--bad)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:13px;color:var(--mut)}
+.tag{padding:2px 8px;border-radius:10px;font-size:12px;font-family:system-ui}
+.ok{background:#dff1e6;color:var(--ok)}.bad{background:#f9dedc;color:var(--bad)}.wait{background:#fde9dc;color:var(--acc)}.end{background:#e5ecee;color:var(--mut)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px}
+.stat b{display:block;font:700 26px system-ui;color:var(--main)}
+.stat.w b{color:var(--bad)}
+.empty{color:var(--mut);padding:10px 0}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:4px;font-family:system-ui;font-size:14px;display:none;z-index:9}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><h1>Hệ thống Quản lý Thư viện</h1><p>Sách · Độc giả · Mượn trả · Thống kê</p></header>
+<nav id="nav"></nav>
+<main id="app"></main>
+<div id="toast"></div>
+<script>
+const KEY="qltv_v1", FINE=2000, DAYS=14, MAXRENEW=2, MAXLOAN=3;
+const today=()=>new Date().toISOString().slice(0,10);
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+const diffDays=(a,b)=>Math.round((new Date(a)-new Date(b))/864e5);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=n=>n.toLocaleString("vi-VN")+"đ";
+
+function seed(){
+  const books=[["Lập trình Python cơ bản","Nguyễn Văn An","Công nghệ",2021,3],["Cấu trúc dữ liệu và giải thuật","Trần Minh Đức","Công nghệ",2019,2],["Cơ sở dữ liệu","Lê Thị Hoa","Công nghệ",2020,4],["Dế Mèn phiêu lưu ký","Tô Hoài","Văn học",2018,3],["Số đỏ","Vũ Trọng Phụng","Văn học",2017,2],["Tuổi trẻ đáng giá bao nhiêu","Rosie Nguyễn","Kỹ năng",2016,3],["Đắc nhân tâm","Dale Carnegie","Kỹ năng",2015,4],["Lịch sử Việt Nam","Trần Trọng Kim","Lịch sử",2014,2],["Kinh tế vi mô","N. Gregory Mankiw","Kinh tế",2022,2],["Giải tích 1","Phạm Quang Huy","Toán học",2020,3]]
+   .map((b,i)=>({id:"S"+String(i+1).padStart(3,"0"),title:b[0],author:b[1],category:b[2],year:b[3],copies:b[4]}));
+  const members=[["Nguyễn Thị Lan","0901000001","lan@mail.com"],["Trần Văn Bình","0901000002","binh@mail.com"],["Lê Quốc Cường","0901000003","cuong@mail.com"],["Phạm Thu Dung","0901000004","dung@mail.com"],["Hoàng Minh Em","0901000005","em@mail.com"]]
+   .map((m,i)=>({id:"DG"+String(i+1).padStart(3,"0"),name:m[0],phone:m[1],email:m[2]}));
+  const t=today();
+  const loans=[
+   {id:"PM001",bookId:"S001",memberId:"DG001",borrowDate:addDays(t,-5),dueDate:addDays(t,9),returnDate:null,renewals:0,fine:0},
+   {id:"PM002",bookId:"S004",memberId:"DG002",borrowDate:addDays(t,-20),dueDate:addDays(t,-6),returnDate:null,renewals:0,fine:0},
+   {id:"PM003",bookId:"S007",memberId:"DG003",borrowDate:addDays(t,-30),dueDate:addDays(t,-16),returnDate:addDays(t,-15),renewals:0,fine:0}];
+  return {books,members,loans};
+}
+let db; try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!db)db=seed();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
+const toast=m=>{const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2600)};
+const nextId=(p,arr)=>p+String(arr.reduce((m,x)=>Math.max(m,+x.id.replace(/\D/g,"")),0)+1).padStart(3,"0");
+const book=id=>db.books.find(b=>b.id===id), mem=id=>db.members.find(m=>m.id===id);
+const active=l=>!l.returnDate;
+const borrowed=id=>db.loans.filter(l=>l.bookId===id&&active(l)).length;
+const avail=b=>b.copies-borrowed(b.id);
+const overdue=l=>active(l)&&l.dueDate<today();
+const fineOf=l=>{const end=l.returnDate||today();return end>l.dueDate?diffDays(end,l.dueDate)*FINE:0};
+
+const tabs=[["books","Sách"],["members","Độc giả"],["loans","Mượn / Trả"],["search","Tra cứu"],["stats","Thống kê"]];
+let tab="books", q="";
+document.getElementById("nav").innerHTML=tabs.map(t=>`<button data-t="${t[0]}">${t[1]}</button>`).join("");
+document.getElementById("nav").onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
+
+function render(){
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));
+  document.getElementById("app").innerHTML=({books:vBooks,members:vMembers,loans:vLoans,search:vSearch,stats:vStats})[tab]();
+}
+const val=id=>document.getElementById(id).value.trim();
+
+/* ---- SÁCH ---- */
+function vBooks(){
+  return `<div class="card"><h2>Thêm sách</h2><div class="row">
+   <input id="bt" placeholder="Tên sách"><input id="ba" placeholder="Tác giả"><input id="bc" placeholder="Thể loại"><input id="by" type="number" placeholder="Năm XB"><input id="bn" type="number" min="1" placeholder="Số bản sao"></div>
+   <button class="b" onclick="addBook()">Thêm sách</button></div>
+   <div class="card"><h2>Danh sách sách (${db.books.length})</h2><div class="tw"><table><tr><th>Mã</th><th>Tên sách</th><th>Tác giả</th><th>Thể loại</th><th>Năm</th><th>Còn/Tổng</th><th></th></tr>
+   ${db.books.map(b=>`<tr><td>${b.id}</td><td>${esc(b.title)}</td><td>${esc(b.author)}</td><td>${esc(b.category)}</td><td>${b.year}</td><td><span class="tag ${avail(b)?"ok":"bad"}">${avail(b)}/${b.copies}</span></td><td><button class="b s d" onclick="delBook('${b.id}')">Xóa</button></td></tr>`).join("")}</table></div></div>`;
+}
+function addBook(){
+  const t=val("bt"),a=val("ba"),c=val("bc"),y=+val("by"),n=+val("bn");
+  if(!t||!a||!c||!(n>0))return toast("Nhập đủ tên, tác giả, thể loại và số bản sao (>0)");
+  db.books.push({id:nextId("S",db.books),title:t,author:a,category:c,year:y||"",copies:n});save();render();toast("Đã thêm sách");
+}
+function delBook(id){
+  if(borrowed(id))return toast("Không xóa được: sách đang có người mượn");
+  if(confirm("Xóa sách "+id+"?")){db.books=db.books.filter(b=>b.id!==id);save();render()}
+}
+/* ---- ĐỘC GIẢ ---- */
+function vMembers(){
+  return `<div class="card"><h2>Thêm độc giả</h2><div class="row"><input id="mn" placeholder="Họ tên"><input id="mp" placeholder="Số điện thoại"><input id="me" placeholder="Email"></div>
+   <button class="b" onclick="addMember()">Thêm độc giả</button></div>
+   <div class="card"><h2>Danh sách độc giả (${db.members.length})</h2><div class="tw"><table><tr><th>Mã</th><th>Họ tên</th><th>SĐT</th><th>Email</th><th>Đang mượn</th><th></th></tr>
+   ${db.members.map(m=>`<tr><td>${m.id}</td><td>${esc(m.name)}</td><td>${esc(m.phone)}</td><td>${esc(m.email)}</td><td>${db.loans.filter(l=>l.memberId===m.id&&active(l)).length}</td><td><button class="b s d" onclick="delMember('${m.id}')">Xóa</button></td></tr>`).join("")}</table></div></div>`;
+}
+function addMember(){
+  const n=val("mn"),p=val("mp"),e=val("me");
+  if(!n||!p)return toast("Nhập họ tên và số điện thoại");
+  db.members.push({id:nextId("DG",db.members),name:n,phone:p,email:e});save();render();toast("Đã thêm độc giả");
+}
+function delMember(id){
+  if(db.loans.some(l=>l.memberId===id&&active(l)))return toast("Không xóa được: độc giả chưa trả sách");
+  if(confirm("Xóa độc giả "+id+"?")){db.members=db.members.filter(m=>m.id!==id);save();render()}
+}
+/* ---- MƯỢN / TRẢ ---- */
+function status(l){
+  if(!active(l))return `<span class="tag end">Đã trả</span>`;
+  return overdue(l)?`<span class="tag bad">Quá hạn ${diffDays(today(),l.dueDate)} ngày</span>`:`<span class="tag wait">Đang mượn</span>`;
+}
+function vLoans(){
+  const ls=[...db.loans].reverse();
+  return `<div class="card"><h2>Lập phiếu mượn</h2><div class="row">
+   <select id="lm">${db.members.map(m=>`<option value="${m.id}">${m.id} - ${esc(m.name)}</option>`).join("")}</select>
+   <select id="lb">${db.books.map(b=>`<option value="${b.id}" ${avail(b)?"":"disabled"}>${esc(b.title)} (còn ${avail(b)})</option>`).join("")}</select></div>
+   <button class="b" onclick="borrow()">Cho mượn (${DAYS} ngày)</button>
+   <p class="empty">Quy định: tối đa ${MAXLOAN} cuốn/người, gia hạn tối đa ${MAXRENEW} lần, phạt ${money(FINE)}/ngày trễ hạn.</p></div>
+   <div class="card"><h2>Phiếu mượn (${ls.length})</h2><div class="tw"><table><tr><th>Phiếu</th><th>Độc giả</th><th>Sách</th><th>Ngày mượn</th><th>Hạn trả</th><th>Trạng thái</th><th>Phạt</th><th></th></tr>
+   ${ls.map(l=>{const f=active(l)?fineOf(l):l.fine;return `<tr><td>${l.id}</td><td>${esc(mem(l.memberId)?.name||l.memberId)}</td><td>${esc(book(l.bookId)?.title||l.bookId)}</td><td>${l.borrowDate}</td><td>${l.dueDate}</td><td>${status(l)}</td><td>${f?money(f):"-"}</td><td>${active(l)?`<button class="b s" onclick="giveBack('${l.id}')">Trả</button> <button class="b s g" onclick="renew('${l.id}')">Gia hạn</button>`:""}</td></tr>`}).join("")}</table></div></div>`;
+}
+function borrow(){
+  const m=val("lm"),b=val("lb");
+  if(!m||!b)return toast("Chọn độc giả và sách");
+  if(db.loans.some(l=>l.memberId===m&&overdue(l)))return toast("Độc giả đang có sách quá hạn, cần trả trước");
+  if(db.loans.filter(l=>l.memberId===m&&active(l)).length>=MAXLOAN)return toast("Đã mượn tối đa "+MAXLOAN+" cuốn");
+  if(avail(book(b))<1)return toast("Sách đã hết bản sao");
+  db.loans.push({id:nextId("PM",db.loans),bookId:b,memberId:m,borrowDate:today(),dueDate:addDays(today(),DAYS),returnDate:null,renewals:0,fine:0});
+  save();render();toast("Đã lập phiếu mượn");
+}
+function giveBack(id){
+  const l=db.loans.find(x=>x.id===id);l.returnDate=today();l.fine=fineOf(l);save();render();
+  toast(l.fine?"Đã trả. Tiền phạt: "+money(l.fine):"Đã trả sách");
+}
+function renew(id){
+  const l=db.loans.find(x=>x.id===id);
+  if(overdue(l))return toast("Phiếu đã quá hạn, không gia hạn được");
+  if(l.renewals>=MAXRENEW)return toast("Đã gia hạn tối đa "+MAXRENEW+" lần");
+  l.dueDate=addDays(l.dueDate,7);l.renewals++;save();render();toast("Đã gia hạn thêm 7 ngày");
+}
+/* ---- TRA CỨU ---- */
+function vSearch(){
+  const k=q.toLowerCase();
+  const rs=k?db.books.filter(b=>[b.title,b.author,b.category].some(x=>x.toLowerCase().includes(k))):[];
+  const hist=k?db.members.filter(m=>m.name.toLowerCase().includes(k)||m.id.toLowerCase()===k):[];
+  return `<div class="card"><h2>Tra cứu</h2><div class="row"><input id="sq" value="${esc(q)}" placeholder="Nhập tên sách, tác giả, thể loại hoặc tên/mã độc giả" oninput="q=this.value;keepFocus()"></div></div>
+   <div id="sr">${resultHtml(rs,hist,k)}</div>`;
+}
+function resultHtml(rs,hist,k){
+  if(!k)return `<p class="empty">Nhập từ khóa để tìm kiếm.</p>`;
+  let h=`<div class="card"><h2>Sách (${rs.length})</h2>`+(rs.length?`<div class="tw"><table><tr><th>Mã</th><th>Tên sách</th><th>Tác giả</th><th>Thể loại</th><th>Còn lại</th></tr>${rs.map(b=>`<tr><td>${b.id}</td><td>${esc(b.title)}</td><td>${esc(b.author)}</td><td>${esc(b.category)}</td><td><span class="tag ${avail(b)?"ok":"bad"}">${avail(b)}/${b.copies}</span></td></tr>`).join("")}</table></div>`:`<p class="empty">Không có sách phù hợp.</p>`)+`</div>`;
+  hist.forEach(m=>{const ls=db.loans.filter(l=>l.memberId===m.id);
+    h+=`<div class="card"><h2>Lịch sử mượn: ${esc(m.name)} (${m.id})</h2>`+(ls.length?`<div class="tw"><table><tr><th>Sách</th><th>Ngày mượn</th><th>Hạn trả</th><th>Trạng thái</th></tr>${ls.map(l=>`<tr><td>${esc(book(l.bookId)?.title)}</td><td>${l.borrowDate}</td><td>${l.dueDate}</td><td>${status(l)}</td></tr>`).join("")}</table></div>`:`<p class="empty">Chưa mượn sách nào.</p>`)+`</div>`});
+  return h;
+}
+function keepFocus(){
+  const k=q.toLowerCase();
+  document.getElementById("sr").innerHTML=resultHtml(k?db.books.filter(b=>[b.title,b.author,b.category].some(x=>x.toLowerCase().includes(k))):[],k?db.members.filter(m=>m.name.toLowerCase().includes(k)||m.id.toLowerCase()===k):[],k);
+}
+/* ---- THỐNG KÊ ---- */
+function vStats(){
+  const act=db.loans.filter(active),od=act.filter(overdue);
+  const totalFine=db.loans.reduce((s,l)=>s+(active(l)?fineOf(l):l.fine),0);
+  const cnt={};db.loans.forEach(l=>cnt[l.bookId]=(cnt[l.bookId]||0)+1);
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const cat={};db.books.forEach(b=>cat[b.category]=(cat[b.category]||0)+b.copies);
+  return `<div class="stats">
+   <div class="stat"><b>${db.books.length}</b>Đầu sách</div><div class="stat"><b>${db.books.reduce((s,b)=>s+b.copies,0)}</b>Tổng bản sao</div>
+   <div class="stat"><b>${db.members.length}</b>Độc giả</div><div class="stat"><b>${act.length}</b>Đang mượn</div>
+   <div class="stat w"><b>${od.length}</b>Quá hạn</div><div class="stat w"><b>${money(totalFine)}</b>Tiền phạt</div></div><br>
+   <div class="card"><h2>Sách được mượn nhiều nhất</h2>${top.length?`<table>${top.map(([id,n])=>`<tr><td>${esc(book(id)?.title)}</td><td>${n} lượt</td></tr>`).join("")}</table>`:`<p class="empty">Chưa có dữ liệu.</p>`}</div>
+   <div class="card"><h2>Số bản sao theo thể loại</h2><table>${Object.entries(cat).map(([c,n])=>`<tr><td>${esc(c)}</td><td>${n}</td></tr>`).join("")}</table></div>
+   <div class="card"><button class="b g" onclick="resetData()">Đặt lại dữ liệu mẫu</button></div>`;
+}
+function resetData(){if(confirm("Xóa mọi thay đổi và quay lại dữ liệu mẫu?")){db=seed();save();render()}}
+render();
+</script>
+</body>
+</html>
